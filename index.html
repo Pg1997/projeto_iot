@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controle de Movimento - ESP32</title>
+  <!-- Biblioteca MQTT.js via CDN -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #ffffff;
+      padding: 24px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+    h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      color: #333;
+      text-align: center;
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      padding: 8px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      background-color: #ffeeba;
+      color: #856404;
+    }
+    .status-bar.conectado {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-bar.erro {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .dot {
+      height: 10px;
+      width: 10px;
+      border-radius: 50%;
+      background-color: currentColor;
+      display: inline-block;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      color: #444;
+      font-size: 14px;
+    }
+    select, input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 16px; /* Evita zoom automático no iOS */
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background-color: #fff;
+    }
+    select:focus, input[type="number"]:focus {
+      outline: none;
+      border-color: #007bff;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    .btn-enviar {
+      background-color: #007bff;
+      color: white;
+    }
+    .btn-enviar:hover:not(:disabled) {
+      background-color: #0056b3;
+    }
+    .btn-parar {
+      background-color: #dc3545;
+      color: white;
+    }
+    .btn-parar:hover:not(:disabled) {
+      background-color: #a71d2a;
+    }
+    .log-box {
+      margin-top: 18px;
+      padding: 10px;
+      background: #f8f9fa;
+      border: 1px solid #e2e6ea;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #555;
+      font-family: monospace;
+      min-height: 42px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Controle de Movimento</h2>
+
+    <div id="statusBar" class="status-bar">
+      <span class="dot"></span>
+      <span id="statusText">Conectando ao EMQX...</span>
+    </div>
+
+    <form id="controlForm">
+      <div class="form-group">
+        <label for="direcao">Direção:</label>
+        <select id="direcao" name="direcao" required>
+          <option value="" disabled selected>Selecione a direção</option>
+          <option value="cima">Para Cima</option>
+          <option value="baixo">Para Baixo</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="velocidade">Velocidade (1 a 100%):</label>
+        <input type="number" id="velocidade" name="velocidade" min="1" max="100" placeholder="Ex: 50" required>
+      </div>
+
+      <div class="form-group">
+        <label for="voltas">Voltas (1 a 100):</label>
+        <input type="number" id="voltas" name="voltas" min="1" max="100" placeholder="Ex: 5" required>
+      </div>
+
+      <div class="btn-group">
+        <button type="submit" id="btnEnviar" class="btn-enviar" disabled>Enviar Comando</button>
+        <button type="button" id="btnParar" class="btn-parar" disabled>PARAR MOTOR</button>
+      </div>
+    </form>
+
+    <div class="log-box" id="logBox">Aguardando conexão...</div>
+  </div>
+
+  <script>
+    // =========================================================
+    // 1. CONFIGURAÇÃO DO EMQX CLOUD (PREENCHA COM SEUS DADOS)
+    // =========================================================
+    const BROKER_URL   = "wss://SEU-BROKER.emqxsl.com:8084/mqtt";
+    const MQTT_USER    = "seu_usuario_emqx";
+    const MQTT_PASS    = "sua_senha_emqx";
+    const TOPICO_CMD   = "esp32/motor/comando";
+    const TOPICO_STAT  = "esp32/motor/status";
+
+    // =========================================================
+    // 2. INICIALIZAÇÃO DO CLIENTE MQTT
+    // =========================================================
+    const statusBar  = document.getElementById("statusBar");
+    const statusText = document.getElementById("statusText");
+    const btnEnviar  = document.getElementById("btnEnviar");
+    const btnParar   = document.getElementById("btnParar");
+    const logBox     = document.getElementById("logBox");
+
+    const clientId = "web_client_" + Math.random().toString(16).substring(2, 8);
+
+    const client = mqtt.connect(BROKER_URL, {
+      clientId: clientId,
+      username: MQTT_USER,
+      password: MQTT_PASS,
+      clean: true,
+      reconnectPeriod: 3000
+    });
+
+    client.on("connect", () => {
+      statusBar.className = "status-bar conectado";
+      statusText.textContent = "Conectado ao Broker";
+      btnEnviar.disabled = false;
+      btnParar.disabled = false;
+      logBox.textContent = "Pronto. Assinando tópico de status...";
+
+      client.subscribe(TOPICO_STAT, (err) => {
+        if (!err) {
+          logBox.textContent = "Conectado e monitorando: " + TOPICO_STAT;
+        }
+      });
+    });
+
+    client.on("error", (err) => {
+      statusBar.className = "status-bar erro";
+      statusText.textContent = "Erro de conexão";
+      logBox.textContent = "Erro: " + err.message;
+    });
+
+    client.on("offline", () => {
+      statusBar.className = "status-bar";
+      statusText.textContent = "Desconectado. Reconectando...";
+      btnEnviar.disabled = true;
+      btnParar.disabled = true;
+    });
+
+    // Recebe retorno do ESP32
+    client.on("message", (topic, message) => {
+      logBox.textContent = `[ESP32]: ${message.toString()}`;
+    });
+
+    // =========================================================
+    // 3. ENVIO DOS COMANDOS EM FORMATO JSON
+    // =========================================================
+    document.getElementById("controlForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const payload = {
+        acao: "mover",
+        direcao: document.getElementById("direcao").value,
+        velocidade: parseInt(document.getElementById("velocidade").value, 10),
+        voltas: parseInt(document.getElementById("voltas").value, 10)
+      };
+
+      const mensagemJSON = JSON.stringify(payload);
+      client.publish(TOPICO_CMD, mensagemJSON, { qos: 1 });
+      logBox.textContent = `Enviado: ${mensagemJSON}`;
+    });
+
+    // Botão de Parada Imediata
+    btnParar.addEventListener("click", () => {
+      const payload = { acao: "parar" };
+      const mensagemJSON = JSON.stringify(payload);
+      client.publish(TOPICO_CMD, mensagemJSON, { qos: 1 });
+      logBox.textContent = `Enviado: ${mensagemJSON}`;
+    });
+  </script>
+
+</body>
+</html>
