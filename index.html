@@ -145,10 +145,9 @@
     <form id="controlForm">
       <div class="form-group">
         <label for="direcao">Direção:</label>
-        <select id="direcao" name="direcao" required>
-          <option value="" disabled selected>Selecione a direção</option>
-          <option value="cima">Para Cima</option>
-          <option value="baixo">Para Baixo</option>
+        <select id="direcao" name="direcao" required>          
+          <option value="up">Para Cima</option>
+          <option value="down">Para Baixo</option>
         </select>
       </div>
 
@@ -175,11 +174,11 @@
     // =========================================================
     // 1. CONFIGURAÇÃO DO EMQX CLOUD (PREENCHA COM SEUS DADOS)
     // =========================================================
-    const BROKER_URL   = "wss://SEU-BROKER.emqxsl.com:8084/mqtt";
-    const MQTT_USER    = "seu_usuario_emqx";
-    const MQTT_PASS    = "sua_senha_emqx";
-    const TOPICO_CMD   = "esp32/motor/comando";
-    const TOPICO_STAT  = "esp32/motor/status";
+    const BROKER_URL   = "wss://d51cad0f.ala.us-east-1.emqxsl.com:8084/mqtt";
+    const MQTT_USER    = "broker-osmar";
+    const MQTT_PASS    = "osmar123";
+    const TOPICO_CMD   = "esp32-01/motor/voltas";
+    //const TOPICO_STAT  = "esp32/motor/status";
 
     // =========================================================
     // 2. INICIALIZAÇÃO DO CLIENTE MQTT
@@ -207,11 +206,11 @@
       btnParar.disabled = false;
       logBox.textContent = "Pronto. Assinando tópico de status...";
 
-      client.subscribe(TOPICO_STAT, (err) => {
-        if (!err) {
-          logBox.textContent = "Conectado e monitorando: " + TOPICO_STAT;
-        }
-      });
+      //client.subscribe(TOPICO_STAT, (err) => {
+      //  if (!err) {
+      //    logBox.textContent = "Conectado e monitorando: " + TOPICO_STAT;
+      //  }
+      //});
     });
 
     client.on("error", (err) => {
@@ -239,9 +238,9 @@
       e.preventDefault();
 
       const payload = {
-        acao: "mover",
+        //acao: "mover",
         direcao: document.getElementById("direcao").value,
-        velocidade: parseInt(document.getElementById("velocidade").value, 10),
+        //velocidade: parseInt(document.getElementById("velocidade").value, 10),
         voltas: parseInt(document.getElementById("voltas").value, 10)
       };
 
