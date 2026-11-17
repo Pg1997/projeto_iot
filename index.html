@@ -178,7 +178,7 @@
     const MQTT_USER    = "broker-osmar";
     const MQTT_PASS    = "osmar123";
     const TOPICO_CMD   = "esp32-01/motor/voltas";
-    const TOPICO_STAT  = "esp32/motor/status";
+    const TOPICO_STOP  = "esp32/motor/parar";
 
     // =========================================================
     // 2. INICIALIZAÇÃO DO CLIENTE MQTT
@@ -253,7 +253,7 @@
     btnParar.addEventListener("click", () => {
       const payload = { acao: "parar" };
       const mensagemJSON = JSON.stringify(payload);
-      client.publish(TOPICO_CMD, mensagemJSON, { qos: 1 });
+      client.publish(TOPICO_STOP, mensagemJSON, { qos: 1 });
       logBox.textContent = `Enviado: ${mensagemJSON}`;
     });
   </script>
